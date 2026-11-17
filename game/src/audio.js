@@ -104,6 +104,21 @@ export function sfxBoost() {
   noiseBurst(0.35, 0.16, 2400);
 }
 
+export function sfxNearMiss() {
+  tone(1180, 0.07, 'sine', 0.14, 0, 1560);
+}
+
+export function sfxLevelUp() {
+  tone(523, 0.1, 'triangle', 0.2);
+  tone(659, 0.1, 'triangle', 0.2, 0.09);
+  tone(784, 0.18, 'triangle', 0.22, 0.18);
+}
+
+export function sfxPowerup() {
+  tone(880, 0.08, 'sine', 0.16, 0, 1320);
+  tone(1320, 0.12, 'sine', 0.14, 0.07);
+}
+
 export function sfxGameOver() {
   tone(392, 0.22, 'triangle', 0.2);
   tone(311, 0.22, 'triangle', 0.2, 0.2);

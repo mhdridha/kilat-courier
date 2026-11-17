@@ -25,6 +25,9 @@ export const COLORS = {
   parcelAmber: '#ffb703',
   parcelTeal: '#2ec4b6',
   parcelPink: '#ff5d8f',
+  powerupShield: '#00e5ff',
+  powerupMagnet: '#b388ff',
+  powerupSlowmo: '#7ee081',
   heart: '#ff5d73',
   hudBg: 'rgba(8, 10, 28, 0.72)',
   text: '#f4f1e6',
@@ -33,6 +36,8 @@ export const COLORS = {
 
 export const PARCEL_COLORS = ['amber', 'teal', 'pink'];
 export const PARCEL_HEX = { amber: '#ffb703', teal: '#2ec4b6', pink: '#ff5d8f' };
+export const POWERUP_KINDS = ['shield', 'magnet', 'slowmo'];
+export const POWERUP_HEX = { shield: '#00e5ff', magnet: '#b388ff', slowmo: '#7ee081' };
 
 export const TUNING = {
   baseSpeed: 340, // px per second at the start of a run
@@ -59,4 +64,13 @@ export const TUNING = {
   pickupScore: 10, // points per parcel grabbed
   distanceScoreEvery: 30, // px travelled per distance point
   comboCap: 5, // highest combo multiplier
+  levelEvery: 45, // seconds survived per level
+  powerupEvery: 9, // seconds between power-up spawns
+  nearMissScore: 25, // points for a close pass
+  nearMissBand: 95, // lateral px: a pass closer than this counts as near-miss
+  magnetRadius: 170, // px: parcels inside are pulled in
+  magnetPull: 340, // px per second parcels are pulled
+  magnetTime: 8, // seconds a magnet lasts
+  slowmoTime: 3, // seconds of slow motion
+  slowmoFactor: 0.5, // world speed multiplier during slow-mo
 };

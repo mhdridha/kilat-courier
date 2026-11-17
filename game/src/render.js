@@ -2,7 +2,7 @@
 // The judge reads the game mostly through its screenshots, so the title,
 // the HUD and the game-over screen are drawn here with the same care as
 // the road itself. No images, no fonts to load: all vector, all procedural.
-import { VIEW, ROAD, LANES, PLAYER_Y, COLORS, PARCEL_HEX, TUNING } from './config.js';
+import { VIEW, ROAD, LANES, PLAYER_Y, COLORS, PARCEL_HEX, POWERUP_HEX, TUNING } from './config.js';
 
 export const BTN_START = { x: 490, y: 512, w: 300, h: 64 };
 export const BTN_RESTART = { x: 490, y: 536, w: 300, h: 64 };
@@ -46,6 +46,67 @@ function drawParcelBox(c, x, y, size, color) {
   c.fillStyle = 'rgba(255,255,255,0.85)';
   c.fillRect(x - 2, y - s / 2, 4, s);
   c.fillRect(x - s / 2, y - 2, s, 4);
+}
+
+function drawShieldIcon(c, x, y, size, color) {
+  const s = size;
+  c.beginPath();
+  c.moveTo(x, y - s / 2);
+  c.lineTo(x + s / 2, y - s / 4);
+  c.lineTo(x + s / 2, y + s / 8);
+  c.quadraticCurveTo(x + s / 2, y + s / 2, x, y + s * 0.62);
+  c.quadraticCurveTo(x - s / 2, y + s / 2, x - s / 2, y + s / 8);
+  c.lineTo(x - s / 2, y - s / 4);
+  c.closePath();
+  c.fillStyle = color;
+  c.fill();
+}
+
+function drawPowerup(c, pu) {
+  const bobY = pu.y + Math.sin(pu.bob) * 3;
+  const color = POWERUP_HEX[pu.kind];
+  const glow = c.createRadialGradient(pu.x, bobY, 2, pu.x, bobY, 36);
+  glow.addColorStop(0, color);
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  c.globalAlpha = 0.4;
+  c.fillStyle = glow;
+  c.beginPath();
+  c.arc(pu.x, bobY, 36, 0, 6.29);
+  c.fill();
+  c.globalAlpha = 1;
+  c.beginPath();
+  c.arc(pu.x, bobY, 20, 0, 6.29);
+  c.fillStyle = '#0d0d1f';
+  c.fill();
+  c.strokeStyle = color;
+  c.lineWidth = 2.5;
+  c.stroke();
+  if (pu.kind === 'shield') {
+    drawShieldIcon(c, pu.x, bobY, 20, color);
+  } else if (pu.kind === 'magnet') {
+    // A horseshoe magnet: arc with two white tips.
+    c.strokeStyle = color;
+    c.lineWidth = 7;
+    c.beginPath();
+    c.arc(pu.x, bobY - 1, 8, Math.PI, 0);
+    c.stroke();
+    c.fillStyle = '#e8f6ff';
+    c.fillRect(pu.x - 12, bobY - 2, 8, 8);
+    c.fillRect(pu.x + 4, bobY - 2, 8, 8);
+  } else {
+    // Slow-mo: a clock face.
+    c.strokeStyle = color;
+    c.lineWidth = 2.5;
+    c.beginPath();
+    c.arc(pu.x, bobY, 9, 0, 6.29);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(pu.x, bobY);
+    c.lineTo(pu.x, bobY - 6);
+    c.moveTo(pu.x, bobY);
+    c.lineTo(pu.x + 5, bobY);
+    c.stroke();
+  }
 }
 
 function drawSky(c, world, now) {
@@ -212,8 +273,22 @@ function drawTraffic(c, t) {
   if (t.kind === 'bus') {
     c.fillRect(-t.w / 2 + 11, -t.h / 2 + 52, t.w - 22, 14);
     c.fillRect(-t.w / 2 + 11, -t.h / 2 + 78, t.w - 22, 14);
+  } else if (t.kind === 'truck') {
+    // Cargo box on top, cab at the bottom.
+    c.fillStyle = '#8d99ae';
+    rr(c, -t.w / 2 + 6, -t.h / 2 + 8, t.w - 12, t.h - 74, 6);
+    c.fill();
+    c.fillStyle = 'rgba(20,24,48,0.85)';
+    c.fillRect(-t.w / 2 + 11, t.h / 2 - 52, t.w - 22, 16);
   } else {
     c.fillRect(-t.w / 2 + 11, t.h / 2 - 38, t.w - 22, 14);
+  }
+  if (t.kind === 'taxi') {
+    // Checker strip on the roof.
+    for (let i = 0; i < 6; i++) {
+      c.fillStyle = i % 2 ? '#0c0c14' : '#f8f9fa';
+      c.fillRect(-t.w / 2 + 10 + i * 8, -t.h / 2 + 8, 8, 8);
+    }
   }
   // Taillights face the player (down).
   c.fillStyle = '#ff2e4d';
@@ -332,6 +407,7 @@ export function drawWorld(c, g) {
     c.globalAlpha = 1;
     drawParcelBox(c, pa.x, bobY, 34, PARCEL_HEX[pa.color]);
   }
+  for (const pu of world.powerups) drawPowerup(c, pu);
   for (const t of world.traffic) drawTraffic(c, t);
   if (state.mode !== 'over') drawPlayer(c, state.player, state, now); // the bike is gone after the crash
   drawParticles(c, world);
@@ -378,6 +454,21 @@ export function drawHUD(c, state) {
   if (state.player.streak >= 1) {
     text(c, 'COMBO ×' + (1 + Math.min(state.player.streak, TUNING.comboCap - 1)), 470, 48, 26, COLORS.bike, 'bold');
   }
+  // Level.
+  text(c, 'LV ' + state.level, 640, 48, 26, COLORS.text, 'bold');
+  // Active power-ups: shield icon, magnet and slow-mo timers.
+  let chipX = 720;
+  if (state.player.shield) {
+    drawShieldIcon(c, chipX + 10, 42, 20, COLORS.powerupShield);
+    chipX += 34;
+  }
+  if (state.elapsed < state.player.magnetUntil) {
+    text(c, 'MAGNET ' + Math.ceil(state.player.magnetUntil - state.elapsed) + 's', chipX, 48, 18, COLORS.powerupMagnet, 'bold');
+    chipX += 130;
+  }
+  if (state.elapsed < state.player.slowmoUntil) {
+    text(c, 'SLOW-MO ' + Math.ceil(state.player.slowmoUntil - state.elapsed) + 's', chipX, 48, 18, COLORS.powerupSlowmo, 'bold');
+  }
   // Hearts.
   for (let i = 0; i < TUNING.hearts; i++) {
     drawHeart(c, 1010 + i * 34, 34, 26, i < state.player.hearts);
@@ -390,6 +481,14 @@ export function drawHUD(c, state) {
   text(c, 'BOOST  [SPACE]', 24, VIEW.h - 34, 13, COLORS.textDim, 'bold');
   drawBoostBar(c, 24, VIEW.h - 26, 200, state.player.boost);
   text(c, '← → lanes · ↑ faster · ↓ brake · P pause · M mute', VIEW.w - 24, VIEW.h - 34, 13, COLORS.textDim, 'normal', 'right');
+}
+
+export function drawLevelBanner(c, state) {
+  const a = Math.min(1, state.levelFlash);
+  c.globalAlpha = a;
+  text(c, 'LEVEL ' + state.level, VIEW.w / 2, 300, 64, COLORS.bike, 'bold', 'center');
+  text(c, 'RUSH HOUR — denser traffic, taxis and trucks join in', VIEW.w / 2, 340, 20, COLORS.text, 'bold', 'center');
+  c.globalAlpha = 1;
 }
 
 function dim(c) {
@@ -424,6 +523,7 @@ export function drawTitle(c, state) {
   c.restore();
   text(c, 'A midnight parcel run through the city that never sleeps.', VIEW.w / 2, 240, 22, COLORS.text, 'normal', 'center');
   text(c, 'Grab parcels. Dodge the traffic. Drop each parcel at the house with the matching colour.', VIEW.w / 2, 272, 18, COLORS.textDim, 'normal', 'center');
+  text(c, 'Power-ups help: shield saves one crash · magnet pulls parcels · slow-mo buys time.', VIEW.w / 2, 300, 17, COLORS.textDim, 'normal', 'center');
   // Controls.
   const cy = 350;
   keyChip(c, '← →', VIEW.w / 2 - 260, cy);
@@ -468,6 +568,7 @@ export function drawGameOver(c, state) {
   text(c, String(state.deliveries), cx - 20, 330, 40, COLORS.text, 'bold');
   text(c, 'DISTANCE', cx + 140, 290, 16, COLORS.textDim, 'bold');
   text(c, (state.distance / 1000).toFixed(1) + ' km', cx + 140, 330, 40, COLORS.text, 'bold');
+  text(c, 'Reached LEVEL ' + state.level, cx, 360, 18, COLORS.textDim, 'bold', 'center');
   if (state.newBest) {
     text(c, '★ NEW BEST! ★', cx, 392, 28, COLORS.bike, 'bold', 'center');
   } else if (state.best > 0) {

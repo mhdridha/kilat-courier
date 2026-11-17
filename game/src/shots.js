@@ -10,8 +10,8 @@ function car(lane, y, color, kind = 'car') {
     lane,
     x: LANES[lane],
     y,
-    w: kind === 'bus' ? 74 : 64,
-    h: kind === 'bus' ? 176 : 112,
+    w: kind === 'truck' ? 84 : kind === 'bus' ? 74 : 64,
+    h: kind === 'truck' ? 200 : kind === 'bus' ? 176 : 112,
     kind,
     color,
     speed: 150,
@@ -27,6 +27,7 @@ export function stageShot(g, which, seed) {
   world.parcels = [];
   world.houses = [];
   world.hazards = [];
+  world.powerups = [];
   world.particles = [];
   world.floats = [];
   state.now = 1.2;
@@ -42,29 +43,34 @@ export function stageShot(g, which, seed) {
 
   if (which === 'play') {
     state.mode = 'playing';
-    state.elapsed = 42;
-    state.distance = 16800;
-    state.score = 1280;
-    state.deliveries = 6;
+    state.elapsed = 58;
+    state.distance = 24600;
+    state.score = 2150;
+    state.deliveries = 9;
     state.best = 2430;
-    state.speed = 520;
+    state.speed = 560;
     state.boosting = true;
+    state.level = 2;
+    state.levelFlash = 1.5;
     const p = state.player;
-    p.streak = 2;
+    p.streak = 3;
     p.carried = ['amber', 'teal'];
     p.hearts = 3;
-    p.boost = 62;
+    p.boost = 78;
     p.lane = 1;
     p.x = LANES[1];
     p.fromX = LANES[1];
     p.slide = 1;
     p.lean = -0.4;
+    p.shield = true;
+    p.magnetUntil = state.elapsed + 5;
     world.traffic = [
       car(0, 120, '#e63946'),
       car(2, 60, '#f4a261', 'bus'),
-      car(1, -140, '#4361ee'),
-      car(0, -300, '#2a9d8f'),
-      car(2, -260, '#adb5bd'),
+      car(2, 230, '#4361ee'),
+      car(0, 520, '#2a9d8f'),
+      car(0, 330, '#ffd60a', 'taxi'),
+      car(1, 100, '#5a6b7d', 'truck'),
     ];
     world.parcels = [
       { lane: 2, x: LANES[2] + 12, y: 430, color: 'teal', bob: 1.1 },
@@ -72,12 +78,16 @@ export function stageShot(g, which, seed) {
     ];
     world.houses = [{ x: 1042, y: 280, w: 226, h: 140, color: 'teal', checked: false, seed: 5 }];
     world.hazards = [{ lane: 1, x: LANES[1], y: 500, kind: 'pothole', r: 26 }];
+    world.powerups = [{ kind: 'slowmo', lane: 1, x: LANES[1] + 40, y: 380, w: 44, h: 44, bob: 0.8 }];
     world.particles = [
       { x: 600, y: 640, vx: -30, vy: 90, life: 0.6, max: 0.8, color: '#ff9f1c', size: 4 },
       { x: 640, y: 650, vx: 20, vy: 110, life: 0.5, max: 0.8, color: '#ffb703', size: 3 },
       { x: 620, y: 630, vx: 0, vy: 70, life: 0.7, max: 0.8, color: '#ff5d8f', size: 3 },
     ];
-    world.floats = [{ x: 900, y: 240, text: '+200', color: '#ffb703', life: 0.9, max: 1.1 }];
+    world.floats = [
+      { x: 790, y: 180, text: '+200', color: '#ffb703', life: 0.9, max: 1.1 },
+      { x: 560, y: 520, text: 'CLOSE! +25', color: '#7ee081', life: 0.9, max: 1.1 },
+    ];
     return;
   }
 
@@ -86,6 +96,7 @@ export function stageShot(g, which, seed) {
   state.score = 2430;
   state.deliveries = 11;
   state.distance = 3800;
+  state.level = 2;
   state.best = 2430;
   state.newBest = true;
   state.player.hearts = 0;

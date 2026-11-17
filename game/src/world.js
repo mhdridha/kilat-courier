@@ -2,7 +2,7 @@
 // and hazards, plus spawning and collisions. The world scrolls toward
 // the player; everything moves down at (player speed - own speed).
 // updateWorld returns the events the run scored on this frame.
-import { VIEW, ROAD, LANES, PLAYER_Y, COLORS, PARCEL_COLORS, PARCEL_HEX, TUNING } from './config.js';
+import { VIEW, ROAD, LANES, PLAYER_Y, COLORS, PARCEL_COLORS, PARCEL_HEX, POWERUP_KINDS, TUNING } from './config.js';
 import { pick, range, rangeInt } from './random.js';
 
 const CAR_COLORS = ['#e63946', '#4361ee', '#adb5bd', '#2a9d8f', '#f4a261'];
@@ -35,9 +35,10 @@ export function createWorld(rng) {
     parcels: [],
     houses: [],
     hazards: [],
+    powerups: [],
     particles: [],
     floats: [],
-    spawn: { traffic: 0.8, parcel: 1.2, house: 3.0, hazard: 5.0 },
+    spawn: { traffic: 0.8, parcel: 1.2, house: 3.0, hazard: 5.0, powerup: 6.0 },
     laneFreeAt: [0, 0, 0],
     scroll: 0,
   };
@@ -72,18 +73,28 @@ function spawnTraffic(world, state, rng) {
   const blocked = new Set(nearTop.map((t) => t.lane));
   if (blocked.size === 3) return;
   if (blocked.has(lane)) return;
-  const isBus = rng() < 0.16;
-  const w = isBus ? 74 : 64;
-  const h = isBus ? 176 : 112;
+  const roll = rng();
+  const level = state.level || 1;
+  let kind = 'car';
+  if (level >= 2 && roll < 0.12) kind = 'truck';
+  else if (roll < 0.26) kind = 'taxi';
+  else if (roll < 0.38) kind = 'bus';
+  const w = kind === 'truck' ? 84 : kind === 'bus' ? 74 : 64;
+  const h = kind === 'truck' ? 200 : kind === 'bus' ? 176 : 112;
+  const color = kind === 'bus' ? BUS_COLOR
+    : kind === 'taxi' ? '#ffd60a'
+    : kind === 'truck' ? '#5a6b7d'
+    : pick(rng, CAR_COLORS);
   world.traffic.push({
     lane,
     x: LANES[lane],
     y: -h - 20,
     w, h,
-    kind: isBus ? 'bus' : 'car',
-    color: isBus ? BUS_COLOR : pick(rng, CAR_COLORS),
-    speed: range(rng, 120, 190), // its own forward speed
+    kind,
+    color,
+    speed: kind === 'truck' ? range(rng, 95, 120) : range(rng, 120, 190), // its own forward speed
     wobble: rng() * 6.28,
+    counted: false,
   });
   world.laneFreeAt[lane] = state.elapsed + range(rng, 0.9, 1.5);
 }
@@ -122,6 +133,19 @@ function spawnHazard(world, rng) {
   });
 }
 
+function spawnPowerup(world, rng) {
+  const lane = rangeInt(rng, 0, 2);
+  world.powerups.push({
+    kind: pick(rng, POWERUP_KINDS),
+    lane,
+    x: LANES[lane] + range(rng, -30, 30),
+    y: -40,
+    w: 44,
+    h: 44,
+    bob: rng() * 6.28,
+  });
+}
+
 function overlaps(ax, ay, aw, ah, bx, by, bw, bh, shrink) {
   return (
     Math.abs(ax - bx) < ((aw + bw) / 2) * shrink &&
@@ -133,6 +157,9 @@ export function updateWorld(world, state, dt, rng) {
   const events = [];
   const p = state.player;
   const speed = state.speed;
+  const slowmo = state.elapsed < p.slowmoUntil;
+  const ws = slowmo ? speed * TUNING.slowmoFactor : speed; // world speed
+  const levelScale = Math.pow(0.94, (state.level || 1) - 1);
 
   // Spawning.
   world.spawn.traffic -= dt;
@@ -142,7 +169,7 @@ export function updateWorld(world, state, dt, rng) {
       TUNING.spawnTrafficMin,
       TUNING.spawnTrafficStart - state.elapsed * TUNING.spawnTrafficRamp,
     );
-    world.spawn.traffic = interval * range(rng, 0.8, 1.25);
+    world.spawn.traffic = interval * range(rng, 0.8, 1.25) * levelScale;
   }
   world.spawn.parcel -= dt;
   if (world.spawn.parcel <= 0) {
@@ -158,6 +185,11 @@ export function updateWorld(world, state, dt, rng) {
   if (world.spawn.hazard <= 0) {
     spawnHazard(world, rng);
     world.spawn.hazard = TUNING.spawnHazardEvery * range(rng, 0.9, 1.3);
+  }
+  world.spawn.powerup -= dt;
+  if (world.spawn.powerup <= 0) {
+    spawnPowerup(world, rng);
+    world.spawn.powerup = TUNING.powerupEvery * range(rng, 0.9, 1.2);
   }
 
   // Scroll the street furniture.
@@ -186,19 +218,29 @@ export function updateWorld(world, state, dt, rng) {
 
   // Traffic drifts down at (player speed - own speed).
   for (const t of world.traffic) {
-    t.y += (speed - t.speed) * dt;
+    t.y += Math.max(30, ws - t.speed) * dt;
     t.wobble += dt * 2;
+    if (t.kind === 'taxi') t.x = LANES[t.lane] + Math.sin(t.wobble) * 22;
   }
   world.traffic = world.traffic.filter((t) => t.y < VIEW.h + 220);
 
   for (const pa of world.parcels) {
-    pa.y += speed * dt;
+    pa.y += ws * dt;
     pa.bob += dt * 5;
+    if (state.elapsed < p.magnetUntil) {
+      const dx = p.x - pa.x;
+      const dy = p.y - pa.y;
+      const d = Math.hypot(dx, dy);
+      if (d < TUNING.magnetRadius && d > 1) {
+        pa.x += (dx / d) * TUNING.magnetPull * dt;
+        pa.y += (dy / d) * TUNING.magnetPull * dt;
+      }
+    }
   }
   world.parcels = world.parcels.filter((pa) => pa.y < VIEW.h + 60);
 
   for (const h of world.houses) {
-    h.y += speed * dt * 0.98;
+    h.y += ws * dt * 0.98;
   }
   world.houses = world.houses.filter((h) => {
     if (h.y > VIEW.h + 180) return false;
@@ -213,7 +255,7 @@ export function updateWorld(world, state, dt, rng) {
     return true;
   });
 
-  for (const hz of world.hazards) hz.y += speed * dt;
+  for (const hz of world.hazards) hz.y += ws * dt;
   world.hazards = world.hazards.filter((hz) => hz.y < VIEW.h + 60);
 
   // Collisions with the player.
@@ -221,8 +263,22 @@ export function updateWorld(world, state, dt, rng) {
   for (const t of world.traffic) {
     if (overlaps(p.x, p.y, 56, 96, t.x, t.y, t.w, t.h, 0.72)) {
       if (now >= p.invulnerableUntil) {
-        events.push({ type: 'crash', x: p.x, y: p.y - 30 });
+        if (p.shield) {
+          p.shield = false;
+          p.invulnerableUntil = now + 1.2;
+          events.push({ type: 'shieldbreak', x: p.x, y: p.y - 30 });
+        } else {
+          events.push({ type: 'crash', x: p.x, y: p.y - 30 });
+        }
         t.y = VIEW.h + 999; // the hit vehicle is gone
+      }
+      continue;
+    }
+    // A vehicle that just passed close by without a crash is a near-miss.
+    if (!t.counted && t.y > PLAYER_Y + 70) {
+      t.counted = true;
+      if (Math.abs(t.x - p.x) < TUNING.nearMissBand) {
+        events.push({ type: 'nearmiss', x: p.x, y: p.y - 60 });
       }
     }
   }
@@ -236,6 +292,16 @@ export function updateWorld(world, state, dt, rng) {
     }
   }
   world.parcels = world.parcels.filter((pa) => pa.y < VIEW.h + 60);
+
+  for (const pu of world.powerups) {
+    pu.y += ws * dt;
+    pu.bob += dt * 5;
+    if (Math.abs(pu.x - p.x) < 52 && Math.abs(pu.y - p.y) < 56) {
+      events.push({ type: 'powerup', kind: pu.kind, x: pu.x, y: pu.y });
+      pu.y = VIEW.h + 999;
+    }
+  }
+  world.powerups = world.powerups.filter((pu) => pu.y < VIEW.h + 80);
 
   for (const hz of world.hazards) {
     if (Math.abs(hz.x - p.x) < 52 && Math.abs(hz.y - p.y) < 52) {

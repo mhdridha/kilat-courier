@@ -1,13 +1,13 @@
 // Kilat Courier — game loop, states and scoring. The loop owns one
 // state object; the world moves it, the renderer draws it, the audio
 // module hears it. Title -> playing -> paused -> over, with restart.
-import { VIEW, LANES, PLAYER_Y, TUNING, PARCEL_HEX } from './config.js';
+import { VIEW, LANES, PLAYER_Y, TUNING, PARCEL_HEX, POWERUP_HEX } from './config.js';
 import { mulberry32 } from './random.js';
 import * as audio from './audio.js';
 import { bindInput, drainKeys, keyHeld, takeClick, inRect } from './input.js';
-import { createPlayer, moveLane, updatePlayer, comboOf, isInvulnerable } from './player.js';
+import { createPlayer, moveLane, updatePlayer, comboOf, grantPowerup, isInvulnerable } from './player.js';
 import { createWorld, updateWorld, burst, floatText } from './world.js';
-import { drawWorld, drawHUD, drawTitle, drawPaused, drawGameOver, BTN_START, BTN_RESTART } from './render.js';
+import { drawWorld, drawHUD, drawLevelBanner, drawTitle, drawPaused, drawGameOver, BTN_START, BTN_RESTART } from './render.js';
 import { stageShot } from './shots.js';
 
 const canvas = document.getElementById('game');
@@ -45,6 +45,8 @@ function freshState() {
     score: 0,
     deliveries: 0,
     speed: TUNING.baseSpeed,
+    level: 1,
+    levelFlash: 0,
     boosting: false,
     shake: 0,
     best: loadBest(),
@@ -116,6 +118,21 @@ function applyEvents(events) {
       burst(world, ev.x, ev.y, '#ff5d73', 26, 300);
       burst(world, ev.x, ev.y, '#ffb703', 14, 200);
       if (p.hearts <= 0) endRun();
+    } else if (ev.type === 'powerup') {
+      grantPowerup(p, ev.kind, state.elapsed);
+      audio.sfxPowerup();
+      burst(world, ev.x, ev.y, POWERUP_HEX[ev.kind], 18, 220);
+      const label = ev.kind === 'shield' ? 'SHIELD UP!' : ev.kind === 'magnet' ? 'MAGNET 8s' : 'SLOW-MO!';
+      floatText(world, ev.x, ev.y - 10, label, POWERUP_HEX[ev.kind]);
+    } else if (ev.type === 'nearmiss') {
+      state.score += TUNING.nearMissScore;
+      audio.sfxNearMiss();
+      floatText(world, ev.x, ev.y - 10, 'CLOSE! +' + TUNING.nearMissScore, '#7ee081');
+    } else if (ev.type === 'shieldbreak') {
+      state.shake = Math.max(state.shake, 8);
+      audio.sfxPowerup();
+      burst(world, ev.x, ev.y, '#00e5ff', 20, 260);
+      floatText(world, ev.x, ev.y - 10, 'SHIELD!', '#00e5ff');
     } else if (ev.type === 'pothole') {
       p.slowUntil = state.elapsed + 0.7;
       state.shake = Math.max(state.shake, 6);
@@ -155,6 +172,14 @@ function update(dt) {
   if (state.mode !== 'playing') return;
 
   state.elapsed += dt;
+  const newLevel = 1 + Math.floor(state.elapsed / TUNING.levelEvery);
+  if (newLevel > state.level) {
+    state.level = newLevel;
+    state.levelFlash = 2.2;
+    audio.sfxLevelUp();
+    floatText(world, VIEW.w / 2, 300, 'LEVEL ' + newLevel + ' — RUSH HOUR', '#ffb703');
+  }
+  state.levelFlash = Math.max(0, state.levelFlash - dt);
   const p = state.player;
 
   // Speed: ramp with survival, Up to push, Down to brake, crash to crawl.
@@ -271,6 +296,7 @@ function render() {
   ctx.clearRect(0, 0, VIEW.w, VIEW.h);
   drawWorld(ctx, g);
   if (state.mode === 'playing' || state.mode === 'paused') drawHUD(ctx, state);
+  if (state.mode === 'playing' && state.levelFlash > 0) drawLevelBanner(ctx, state);
   if (state.mode === 'title') drawTitle(ctx, state);
   if (state.mode === 'paused') drawPaused(ctx, state);
   if (state.mode === 'over') drawGameOver(ctx, state);

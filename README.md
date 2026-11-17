@@ -8,6 +8,9 @@
 
 - Pick up parcels (up to 3) and deliver them by riding past the matching house
 - Boost with Space, brake with Down, speed up with Up — traffic gets denser and faster the longer you survive
+- Every 45 seconds you level up: rush hour brings taxis that swerve and long trucks
+- Power-ups on the road: shield (survives one crash), magnet (pulls parcels in), slow-mo (the world crawls for 3 seconds)
+- Close passes earn a near-miss bonus; deliveries build your combo, crashes break it — three crashes and the run is over
 - Score, deliveries, combo, hearts and boost meter on the HUD; synthesized engine and effects, no audio files
 - Everything is drawn in code and runs offline from static files — no network, no assets to download
 

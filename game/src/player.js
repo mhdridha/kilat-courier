@@ -20,6 +20,9 @@ export function createPlayer() {
     oilUntil: 0, // steering locked briefly after an oil slick
     carried: [], // parcel colours, at most TUNING.maxCarry
     streak: 0, // consecutive deliveries since the last crash
+    shield: false, // one free crash, from a shield power-up
+    magnetUntil: 0, // parcels are pulled in while now < this
+    slowmoUntil: 0, // the world runs slow while now < this
   };
 }
 
@@ -52,6 +55,20 @@ export function updatePlayer(player, dt, now) {
 
 export function comboOf(player) {
   return 1 + Math.min(player.streak, TUNING.comboCap - 1);
+}
+
+export function grantPowerup(player, kind, now) {
+  if (kind === 'shield') player.shield = true;
+  else if (kind === 'magnet') player.magnetUntil = now + TUNING.magnetTime;
+  else if (kind === 'slowmo') player.slowmoUntil = now + TUNING.slowmoTime;
+}
+
+export function hasMagnet(player, now) {
+  return now < player.magnetUntil;
+}
+
+export function isSlowmo(player, now) {
+  return now < player.slowmoUntil;
 }
 
 export function isInvulnerable(player, now) {
